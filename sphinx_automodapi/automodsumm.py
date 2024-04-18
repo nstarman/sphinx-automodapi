@@ -46,6 +46,12 @@ options:
         in the generated documentation. The flags ``:inherited-members:`` or
         ``:no-inherited-members:`` allows overrriding this global setting.
 
+    * ``:sort:``
+        If the module contains ``__all__``, sort the module's objects
+        alphabetically (if ``__all__`` is not present, the objects are found
+        using `dir`, which always gives a sorted list).
+
+
 This extension also adds two sphinx configuration options:
 
 * ``automodsumm_writereprocessed``
@@ -125,6 +131,7 @@ class Automodsumm(Autosummary):
     option_spec['inherited-members'] = flag
     option_spec['no-inherited-members'] = flag
     option_spec['noindex'] = flag
+    option_spec['sort'] = flag
 
     def run(self):
         env = self.state.document.settings.env
@@ -133,7 +140,7 @@ class Automodsumm(Autosummary):
         nodelist = []
 
         try:
-            localnames, fqns, objs = find_mod_objs(modname)
+            localnames, fqns, objs = find_mod_objs(modname, sort='sort' in self.options)
         except ImportError:
             logger.warning("Couldn't import module " + modname)
             return []
@@ -374,12 +381,12 @@ def automodsumm_to_autosummary_lines(fn, app):
                                                       opssecs, remainders)):
         allindent = i1 + ('    ' if i2 is None else i2)
 
-        # filter out functions-only, classes-only, and ariables-only
+        # filter out functions-only, classes-only, variables-only, and sort
         # options if present.
         oplines = ops.split('\n')
         toskip = []
         allowedpkgnms = []
-        funcsonly = clssonly = varsonly = False
+        funcsonly = clssonly = varsonly = sort = False
         for i, ln in reversed(list(enumerate(oplines))):
             if ':functions-only:' in ln:
                 funcsonly = True
@@ -395,6 +402,9 @@ def automodsumm_to_autosummary_lines(fn, app):
                 del oplines[i]
             if ':allowed-package-names:' in ln:
                 allowedpkgnms.extend(_str_list_converter(ln.replace(':allowed-package-names:', '')))
+                del oplines[i]
+            if ':sort:' in ln:
+                sort = True
                 del oplines[i]
         if [funcsonly, clssonly, varsonly].count(True) > 1:
             msg = ('Defined more than one of functions-only, classes-only, '
@@ -413,7 +423,7 @@ def automodsumm_to_autosummary_lines(fn, app):
         newlines.extend(oplines)
 
         ols = True if len(allowedpkgnms) == 0 else allowedpkgnms
-        for nm, fqn, obj in zip(*find_mod_objs(modnm, onlylocals=ols)):
+        for nm, fqn, obj in zip(*find_mod_objs(modnm, onlylocals=ols, sort=sort)):
             if nm in toskip:
                 continue
             if funcsonly and not inspect.isroutine(obj):
